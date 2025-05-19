@@ -36,20 +36,17 @@ const getInitialSandwiches = (): SandwichData[] => {
     const storedData = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (storedData) {
       const parsedData = JSON.parse(storedData);
-      // Basic validation to ensure it's an array
       if (Array.isArray(parsedData)) {
-         // Further validation could be added here to check item structure
-        return parsedData.slice(0, 50); // Ensure we only load max 50
+        return parsedData.slice(0, 50); 
       }
     }
   } catch (error) {
     console.error('Error reading sandwiches from localStorage:', error);
   }
-  return []; // Return empty array if nothing stored or error
+  return []; 
 };
 
 const Dashboard = () => {
-  // Initialize state from localStorage
   const [sandwiches, setSandwiches] = useState<SandwichData[]>(getInitialSandwiches);
   const [liveBalance, setLiveBalance] = useState<number>(0);
   const [profitPerHour, setProfitPerHour] = useState<{ [key: string]: number }>({});
@@ -76,14 +73,13 @@ const Dashboard = () => {
     return format(new Date(timestamp), 'HH:mm:ss');
   };
 
-  // Effect 1: Fetch HISTORICAL balance data ONCE on mount
+  // UseEffect 1: Fetch HISTORICAL balance data ONCE on mount
   useEffect(() => {
     const fetchHistoricalBalance = async () => {
       setIsHistoryLoading(true);
       const endTime = new Date();
-      // Ensure startTime is 24 hours ago
       const startTime = new Date(endTime.getTime() - 24 * 60 * 60 * 1000);
-      const step = '1m'; // Fetch data point every 1 minute
+      const step = '1m'; 
       const query = 'sandwich_bank_balance_amount';
 
       try {
@@ -96,30 +92,28 @@ const Dashboard = () => {
           // Assuming we only care about the first series for this metric
           const series = result.result[0] as RangeVector;
           const historicalData = series.values.map(val => ({
-            time: val.time.getTime(), // Convert Date object back to timestamp (ms)
+            time: val.time.getTime(), 
             balance: val.value
           }));
           console.log(`Fetched ${historicalData.length} historical data points.`);
           setBalanceChartData(historicalData);
         } else {
           console.error('No matrix data returned for historical balance query:', query, result);
-          setBalanceChartData([]); // Start empty if history fails
+          setBalanceChartData([]); 
         }
       } catch (error) {
         console.error('Error fetching historical balance with prometheus-query:', error);
-        setBalanceChartData([]); // Start empty on error
+        setBalanceChartData([]); 
       } finally {
          setIsHistoryLoading(false);
       }
     };
 
     fetchHistoricalBalance();
-    // This effect runs only once on mount
-  }, []); // Empty dependency array
+  }, []); 
 
-  // Effect 2: Fetch LIVE balance data periodically and APPEND
+  // UseEffect 2: Fetch LIVE balance data periodically and APPEND
   useEffect(() => {
-    // Function to fetch the single latest balance point
     const fetchLatestBalance = async () => {
       try {
         const query = 'sandwich_bank_balance_amount';
@@ -129,41 +123,34 @@ const Dashboard = () => {
            const instantVectorResult = result.result as InstantVector[];
            if (instantVectorResult[0].value) {
              const newBalance = instantVectorResult[0].value.value;
-             const newTimestamp = instantVectorResult[0].value.time.getTime(); // Use timestamp from Prometheus
-             setLiveBalance(newBalance); // Update the displayed live balance number
-
-             // Append the new data point to the existing chart data
+             const newTimestamp = instantVectorResult[0].value.time.getTime(); 
+             setLiveBalance(newBalance); 
              setBalanceChartData(prevData => {
                 const newDataPoint = { time: newTimestamp, balance: newBalance };
-                // Avoid adding duplicate points if timestamp hasn't changed much
                 if (prevData.length > 0 && prevData[prevData.length - 1].time >= newTimestamp) {
                   return prevData;
                 }
-                // Keep potentially more points than needed for 3h initially, filter later
                 const updatedData = [...prevData, newDataPoint];
-                // Optional: Trim array if it gets excessively large over time, though filtering helps
-                // return updatedData.slice(-2000); // Keep last 2000 points max
                 return updatedData;
              });
            }
         } else {
-          // Don't log error if instant query temporarily fails, live balance just won't update
+          // Error log 1
            // console.log('No vector data returned for live balance update:', query, result);
         }
       } catch (error) {
-        // Avoid logging frequent errors for live updates, maybe use a counter
+        //Catch error log2
         // console.error('Error fetching live balance update:', error);
       }
     };
 
-    // Fetch immediately and then set interval
-    // Wait a bit after initial load before starting live updates
-    const initialDelay = 5000; // 5 seconds
-    const intervalTime = 30000; // 30 seconds
+ 
+    const initialDelay = 5000; 
+    const intervalTime = 30000;
     let intervalId: NodeJS.Timeout | null = null;
 
     const timeoutId = setTimeout(() => {
-      fetchLatestBalance(); // Fetch first live point
+      fetchLatestBalance(); 
       intervalId = setInterval(fetchLatestBalance, intervalTime);
     }, initialDelay);
 
@@ -171,7 +158,6 @@ const Dashboard = () => {
       clearTimeout(timeoutId);
       if (intervalId) clearInterval(intervalId);
     };
-    // Rerun if prom ref changes (shouldn't happen often)
   }, [prom]);
 
   // Fetch profit per hour using prometheus-query
@@ -217,15 +203,15 @@ const Dashboard = () => {
     } catch (error) {
       console.error('Error saving sandwiches to localStorage:', error);
     }
-  }, [sandwiches]); // Run this effect only when the sandwiches state changes
+  }, [sandwiches]);
 
-  // WebSocket connection for sandwiches - Updated primary URL
+  // WebSocket connection for sandwiches
   useEffect(() => {
     console.log('Attempting to connect to WebSocket...');
 
     // Revert back to the IP address for the WebSocket URL
-    const primaryWsUrl = 'ws://208.91.110.246:6287/ws/livefeed'; // Original IP
-    const fallbackWsUrl = 'ws://136.144.59.181:6287/ws/livefeed'; // Keep old fallback
+    const primaryWsUrl = 'wss://208.91.110.246:6287/ws/livefeed'; 
+    const fallbackWsUrl = 'wss://136.144.59.181:6287/ws/livefeed'; // Keep old fallback
 
     let websocket: WebSocket | null = null;
     let reconnectAttempts = 0;
@@ -233,17 +219,15 @@ const Dashboard = () => {
     const reconnectDelay = 3000;
     let fallbackIntervalId: NodeJS.Timeout | null = null;
     let reconnectIntervalId: NodeJS.Timeout | null = null;
-    let initialFallbackIntervalId: NodeJS.Timeout | null = null; // For the initial backup fetch
+    let initialFallbackIntervalId: NodeJS.Timeout | null = null; 
 
     // Define the updateSandwiches function to handle state update and localStorage saving
     const updateSandwiches = (newSandwich: SandwichData) => {
-       // Basic validation of structure before setting state
        if (newSandwich && newSandwich.data && newSandwich.data.sandwich) {
          setSandwiches(prev => {
            const existingIndex = prev.findIndex(s => s.data.sandwich.slot === newSandwich.data.sandwich.slot);
            if (existingIndex === -1) {
              const updatedSandwiches = [newSandwich, ...prev].slice(0, 50);
-             // No need to explicitly save here, the separate useEffect handles it
              return updatedSandwiches;
            }
            return prev; // Return previous state if duplicate
@@ -264,13 +248,13 @@ const Dashboard = () => {
              try {
                // Assuming the value is a JSON string of the sandwich data
                const sandwichData = JSON.parse(instantVectorResult[0].value.value.toString());
-               updateSandwiches(sandwichData); // Use the update function
+               updateSandwiches(sandwichData); 
              } catch (parseError) {
                console.error('Error parsing fallback sandwich data JSON:', parseError, instantVectorResult[0].value.value);
              }
           }
         } else {
-          // console.log('No fallback sandwich data available from Prometheus.'); // Less noisy log
+          // console.log('Prometheus fallback error');
         }
       } catch (error) {
         console.error('Error fetching fallback sandwich data via Prometheus:', error);
@@ -288,7 +272,6 @@ const Dashboard = () => {
       websocket.onopen = () => {
         console.log('WebSocket connection established');
         reconnectAttempts = 0;
-        // Clear fallback intervals if connection is successful
         if (fallbackIntervalId) clearInterval(fallbackIntervalId);
         if (reconnectIntervalId) clearInterval(reconnectIntervalId);
         fallbackIntervalId = null;
@@ -298,9 +281,8 @@ const Dashboard = () => {
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-           // Basic validation
            if (data && data.data && data.data.sandwich) {
-               updateSandwiches(data); // Use the update function
+               updateSandwiches(data); 
            } else {
                console.error('Received WebSocket message with unexpected structure:', data);
            }
@@ -311,22 +293,20 @@ const Dashboard = () => {
 
       websocket.onerror = (error) => {
         console.error('WebSocket error:', error);
-        fetchSandwichesFallback(); // Fetch fallback on error
+        fetchSandwichesFallback(); 
       };
 
       websocket.onclose = (event) => {
         console.log('WebSocket connection closed. Code:', event.code, 'Reason:', event.reason);
 
-        // Don't attempt reconnect if explicitly closed (code 1000 or 1005)
         if (event.code === 1000 || event.code === 1005) {
           console.log('WebSocket closed normally.');
           return;
         }
 
-        // Try to reconnect if we haven't exceeded max attempts
         if (reconnectAttempts < maxReconnectAttempts) {
           reconnectAttempts++;
-          const nextUrl = url === primaryWsUrl ? fallbackWsUrl : primaryWsUrl; // Alternate between primary and fallback
+          const nextUrl = url === primaryWsUrl ? fallbackWsUrl : primaryWsUrl; 
           console.log(`Attempting to reconnect (${reconnectAttempts}/${maxReconnectAttempts}) to ${nextUrl}...`);
           setTimeout(() => connectWebSocket(nextUrl), reconnectDelay);
 
@@ -334,32 +314,27 @@ const Dashboard = () => {
           fetchSandwichesFallback();
         } else {
           console.log('Max reconnection attempts reached. Switching to fallback mode...');
-           // Avoid starting multiple intervals if already in fallback mode
           if (!fallbackIntervalId) {
-            fallbackIntervalId = setInterval(fetchSandwichesFallback, 10000); // Fetch every 10 seconds
+            fallbackIntervalId = setInterval(fetchSandwichesFallback, 10000);
           }
           if (!reconnectIntervalId) {
-             // Try to reconnect to WebSocket periodically even in fallback mode
             reconnectIntervalId = setInterval(() => {
               console.log('Attempting periodic reconnect...');
-              reconnectAttempts = 0; // Reset attempts for periodic check
-              connectWebSocket(primaryWsUrl); // Always try primary first on periodic reconnect
-            }, 30000); // Try reconnecting every 30 seconds
+              reconnectAttempts = 0; 
+              connectWebSocket(primaryWsUrl); 
+            }, 30000); 
           }
         }
       };
     };
 
-    // Start with primary server
     connectWebSocket(primaryWsUrl);
-
-    // Set up initial periodic fallback data fetching as a backup
     initialFallbackIntervalId = setInterval(fetchSandwichesFallback, 30000);
 
     return () => {
       console.log('Cleaning up Dashboard component...');
       if (websocket) {
-        websocket.onclose = () => {}; // Disable onclose handler before closing
+        websocket.onclose = () => {}; 
         websocket.close();
       }
       // Clear all intervals
@@ -438,7 +413,6 @@ const Dashboard = () => {
   const formatAmount = (amount: number | undefined, decimals: number = 9): string => {
     if (amount === undefined || amount === null || isNaN(amount)) return 'N/A';
     const divisor = Math.pow(10, decimals);
-    // Determine fixed decimal places based on input decimals
     const fixedDecimals = decimals === 9 ? 3 : (decimals === 6 ? 2 : 1);
     return (amount / divisor).toFixed(fixedDecimals);
   };
@@ -496,14 +470,12 @@ const Dashboard = () => {
       <h1 className="text-2xl font-bold mb-6 text-white">Dashboard</h1>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        {/* Balance & Profit Card (Spans 2 columns) - Darker card background */}
         <div className="md:col-span-2 card-bordered p-4 rounded-lg shadow">
           <div className="flex justify-between items-center mb-4">
             <div>
                <h2 className="text-xl font-semibold text-gray-100">Balance Over Time</h2>
                <p className="text-sm text-gray-500">Real-time balance for the Solana MEV Bot</p>
             </div>
-            {/* Adjusted Button Styles */}
             <div className="flex space-x-1 bg-gray-800 rounded-lg p-1">
               <button
                 onClick={() => setActiveBalanceTab('Balance')}
@@ -519,9 +491,7 @@ const Dashboard = () => {
               </button>
             </div>
           </div>
-          {/* Chart Area and Stats */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
-            {/* Area Chart for Balance (Spans 2 columns) */}
             <div className="lg:col-span-2 h-64">
               <ResponsiveContainer width="100%" height="100%">
                 {activeBalanceTab === 'Balance' ? (
@@ -556,9 +526,9 @@ const Dashboard = () => {
                         interval="preserveStartEnd"
                         ticks={[
                           twentyFourHoursAgo,
-                          twentyFourHoursAgo + (6 * 60 * 60 * 1000),  // +6h
-                          twentyFourHoursAgo + (12 * 60 * 60 * 1000), // +12h
-                          twentyFourHoursAgo + (18 * 60 * 60 * 1000), // +18h
+                          twentyFourHoursAgo + (6 * 60 * 60 * 1000),  
+                          twentyFourHoursAgo + (12 * 60 * 60 * 1000), 
+                          twentyFourHoursAgo + (18 * 60 * 60 * 1000), 
                           now
                         ]}
                         padding={{ left: 10, right: 10 }}
@@ -612,9 +582,9 @@ const Dashboard = () => {
                         interval="preserveStartEnd"
                         ticks={[
                           twentyFourHoursAgo,
-                          twentyFourHoursAgo + (6 * 60 * 60 * 1000),  // +6h
-                          twentyFourHoursAgo + (12 * 60 * 60 * 1000), // +12h
-                          twentyFourHoursAgo + (18 * 60 * 60 * 1000), // +18h
+                          twentyFourHoursAgo + (6 * 60 * 60 * 1000),  
+                          twentyFourHoursAgo + (12 * 60 * 60 * 1000),
+                          twentyFourHoursAgo + (18 * 60 * 60 * 1000), 
                           now
                         ]}
                         padding={{ left: 10, right: 10 }}
@@ -639,17 +609,13 @@ const Dashboard = () => {
                 )}
               </ResponsiveContainer>
             </div>
-            {/* Live Stats Area - Darker backgrounds, green text */}
             <div className="flex flex-col justify-between space-y-4">
-              {/* Live Balance */}
               <div className="card-bordered p-3">
                 <h3 className="text-sm font-semibold text-white mb-1">Live Balance</h3>
                 <p className="text-3xl font-bold text-green-400">${liveBalance.toFixed(2)}</p>
               </div>
-              {/* Profit per Hour */}
               <div className="card-bordered p-3">
                 <h3 className="text-sm font-semibold text-white mb-2">Profit per Hour</h3>
-                {/* Time Range Buttons - Darker style */}
                 <div className="grid grid-cols-3 gap-1 mb-2">
                   {['1h', '3h', '6h', '12h', '24h'].map((range) => (
                     <button
@@ -670,16 +636,13 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Live Feed Card - Darker background */}
         <div className="card-bordered p-4 flex flex-col" style={{ maxHeight: '500px' }}>
           <div className="flex justify-between items-center mb-4 flex-shrink-0">
             <h2 className="text-xl font-semibold text-gray-100">Live Feed</h2>
-            {/* Adjusted select style */}
             <select className="bg-black text-white rounded px-2 py-1 text-sm border border-white/20 focus:outline-none focus:border-green-500">
               <option>Sandwiches</option>
             </select>
           </div>
-          {/* Scrollable Feed Area - Darker items */}
           <div className="flex-grow overflow-y-auto space-y-2 pr-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800">
             {sandwiches.length === 0 && (
                <div className="text-center text-gray-500 py-10">Waiting for sandwich data...</div>
@@ -691,7 +654,6 @@ const Dashboard = () => {
                   <span>{format(new Date(s.data.sandwich.timestamp * 1000), 'HH:mm:ss')}</span>
                 </div>
                 <div className="text-sm space-y-0.5 text-gray-300">
-                   {/* Frontrun - Green arrow */}
                    <p className="flex items-center">
                        <span className="text-green-500 w-4">↑</span>
                        {s.data.sandwich.isSell ?
@@ -699,15 +661,12 @@ const Dashboard = () => {
                            :
                            <span>{formatAmount(s.data.sandwich.frontrunInAmount, 9)} SOL → {formatAmount(s.data.sandwich.frontrunOutAmount, s.data.permanentTokenData?.rawTokenMetadata?.symbol === 'USDC' ? 6 : 9)} {s.data.permanentTokenData?.rawTokenMetadata?.symbol || 'TOK'}</span>
                        }
-                       {/* Link placeholder - Adjusted style */}
                        <a href="#" className="ml-1 text-gray-500 hover:text-green-500 text-xs opacity-75">🔗</a>
                    </p>
-                   {/* User Tx - Gray */}
                    <p className="text-gray-400 text-xs pl-4">
                        <span className="opacity-75">👤 User Transaction</span>
                        <a href="#" className="ml-1 text-gray-500 hover:text-green-500 text-xs opacity-75">🔗</a>
                    </p>
-                   {/* Backrun - Red arrow */}
                    <p className="flex items-center">
                        <span className="text-red-500 w-4">↓</span>
                         {s.data.sandwich.isSell ?
@@ -718,7 +677,6 @@ const Dashboard = () => {
                        <a href="#" className="ml-1 text-gray-500 hover:text-green-500 text-xs opacity-75">🔗</a>
                    </p>
                 </div>
-                {/* Profit Line - Green text */}
                 <p className="text-xs mt-2">
                   <span className="font-semibold text-gray-400">Profit:</span>
                   <span className="font-semibold text-green-500 ml-1">{formatProfit(s.data.sandwich.solChange, s.data.sandwich.tokenChange, s.data.permanentTokenData?.rawTokenMetadata?.symbol)}</span>
@@ -729,7 +687,6 @@ const Dashboard = () => {
           </div>
         </div>
 
-        {/* Bundles per Hour Card (Spans 3 columns) - Darker background, adjusted button/chart styles */}
         <div className="md:col-span-3 card-bordered p-4 mt-8">
           <div className="flex justify-between items-center mb-2">
             <div>
